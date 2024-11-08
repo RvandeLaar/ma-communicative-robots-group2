@@ -31,8 +31,8 @@ You also need to have sufficient memory to run the Docker image, which 8.73GB!
    3. [XLM-RoBERTa-DialogueAct-classification](https://vu.data.surfsara.nl/index.php/s/dw0YCJAVFM870DT)
    The link will get you to the university server. Pushing the Download button (at the top-right corner) will save the files as a ```tar.zip``` file.
    Unpack these in the resources folder and rename the folder ```24_03_11``` into ```conversational_triples```.
-## Running the conversational agent
 
+## Running the conversational agent
 * Make sure that GraphDB is running in the back with the “sandbox” repository
 * Clone this repository somewhere on your disk 
 * Place the donwloaded folders for the LLMs in the ```resources``` folder.
