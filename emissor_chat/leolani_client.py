@@ -33,8 +33,14 @@ class Action(Enum):
     TeleportFull = auto()
     Look = auto()
 
+# @dataclass
+# class ApplicationContext(ScenarioContext):
+#     speaker: Agent
+
+
 @dataclass
 class ApplicationContext(ScenarioContext):
+    agent: Agent
     speaker: Agent
 
 class LeolaniChatClient():
@@ -51,7 +57,7 @@ class LeolaniChatClient():
         self._agent= Agent(name=agent, uri=f"http://cltl.nl/leolani/world/{agent.lower()}")
         self._human= Agent(name=human, uri=f"http://cltl.nl/leolani/world/{human.lower()}")
         self._scenario_storage = ScenarioStorage(emissor_path)
-        self._scenario_context =  ApplicationContext(self._agent.name, self._human)
+        self._scenario_context =  ApplicationContext(self._agent, self._human)
         scenario_start = timestamp_now()
         self._scenario_id = str(uuid.uuid4())
         self._scenario_controller =self._scenario_storage.create_scenario(self._scenario_id, scenario_start, None, self._scenario_context, signals)
