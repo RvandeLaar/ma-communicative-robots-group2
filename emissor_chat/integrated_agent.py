@@ -10,7 +10,7 @@ from PIL import Image
 from sentence_transformers import SentenceTransformer, util
 from typing import List, Tuple, Dict, Any
 
-ACTIONS = ["find", "describe", "move", "turn", "head", "explore_room", "switch_room", "return_to_previous_room"]
+ACTIONS = ["find", "describe", "move", "turn", "head", "explore_room", "switch_room", "return_to_previous_room", "perform_360_view"]
 
 class Agent:
     def __init__(self, controller: object):
@@ -21,11 +21,19 @@ class Agent:
         # Initialize room data (from AgentNavigator)
         self.room_data = self.initialize_room_data()
 
+        # Count the number of actions (environment interactions)
+        self.actions = 0
+
         # Attributes from Ai2ThorClient
         self._answers = []
         self._actions = []
         self._perceptions = []
         self._human_description = ""
+
+    def increment_actions(self, event):
+        # If the event was successful and changed state, increment action count
+        if event.metadata['lastActionSuccess']:
+            self.actions += 1
 
     def initialize_room_data(self) -> dict:
         return {
@@ -85,19 +93,21 @@ class Agent:
                             'explored': False
                         }
 
-        for i in range(4):
-            event = self.controller.last_event
-            process_view(event)
-            if i < 3:
-                event = self.controller.step(action='RotateRight', degrees=90)
+        # Initial view without turning
+        event = self.controller.last_event
+        process_view(event)
 
-        # If you decide to stitch:
+        for i in range(3):
+            rotate_event = self.controller.step(action='RotateRight', degrees=90)
+            self.increment_actions(rotate_event)
+            process_view(rotate_event)
+
+        # Stitch images
         panorama = self.stitch_images(images)
         panorama_path = "room_panorama.jpg"
         cv2.imwrite(panorama_path, panorama)
         return panorama_path
 
-    # Optionally, if you want to keep stitch_images:
     def stitch_images(self, images):
         cv_images = [cv2.cvtColor(np.array(Image.fromarray(img)), cv2.COLOR_RGB2BGR) for img in images]
         stitcher = cv2.Stitcher_create()
@@ -140,11 +150,11 @@ class Agent:
         try:
             event = self.controller.step(action='Teleport', position=target_position)
             if not event.metadata['lastActionSuccess']:
-                print(f"Teleport failed to position: {target_position}")
+                self._answers.append(f"Teleport failed to position: {target_position}")
                 return
             current_room['visited_positions'].add((target_position['x'], target_position['y'], target_position['z']))
             self.agent_position = event.metadata['agent']['position']
-            print(f"Agent moved to new position: {target_position}")
+            self._answers.append(f"Agent moved to new position: {target_position}")
         except Exception as e:
             print(f"Error while moving to new position: {e}")
 
@@ -158,12 +168,13 @@ class Agent:
 
         target_position = self.find_best_position_near_door(agent_pos, door_coords)
         if not target_position:
-            print("No valid position found near the door.")
+            self._answers.append("No valid position found near the door.")
             return False
         try:
             event = self.controller.step(action='Teleport', position=target_position)
+            self.increment_actions(event)
             if not event.metadata['lastActionSuccess']:
-                print(f"Failed to teleport to position {target_position}.")
+                self._answers.append(f"Failed to teleport to position {target_position}.")
                 return False
             self.agent_position = event.metadata['agent']['position']
         except Exception as e:
@@ -189,9 +200,8 @@ class Agent:
                 'explored': True
             }
             self.room_data['current_room'] = new_room_key
-        print(f"Entered new room: {new_room_key}")
+        self._answers.append(f"Entered new room: {new_room_key}")
         self.close_door()
-        print("Closed the door.")
 
     def close_door(self):
         event = self.controller.last_event
@@ -203,7 +213,7 @@ class Agent:
         ]
 
         if not open_doors:
-            print("No open doors found.")
+            self._answers.append("No open doors found.")
             return
 
         closest_door = min(
@@ -213,8 +223,11 @@ class Agent:
 
         door_id = closest_door['objectId']
         close_event = self.controller.step(action='CloseObject', objectId=door_id)
+        self.increment_actions(close_event)
         if not close_event.metadata['lastActionSuccess']:
-            print("Failed to close the door.")
+            self._answers.append("Failed to close the door.")
+        else:
+            self._answers.append("Closed the door.")
 
     def switch_new_room(self):
         current_room_key = self.room_data['current_room']
@@ -225,7 +238,7 @@ class Agent:
             if not door_info['explored']
         ]
         if not unexplored_doors:
-            print("No unexplored doors available in the current room.")
+            self._answers.append("No unexplored doors available in the current room.")
             return False
 
         door_id, _ = unexplored_doors[0]
@@ -237,14 +250,14 @@ class Agent:
         prev_room_key = current_room.get('previous_room', None)
 
         if not prev_room_key:
-            print("No previous room recorded. Cannot return.")
+            self._answers.append("No previous room recorded. Cannot return.")
             return False
 
         previous_room = self.room_data['rooms'][prev_room_key]
         visited_positions = previous_room.get('visited_positions', None)
 
         if not visited_positions:
-            print(f"No visited positions recorded for previous room: {prev_room_key}")
+            self._answers.append(f"No visited positions recorded for previous room: {prev_room_key}")
             return False
 
         visited_positions_list = list(visited_positions)
@@ -252,21 +265,22 @@ class Agent:
         chosen_pos = {'x': chosen_pos_tuple[0], 'y': chosen_pos_tuple[1], 'z': chosen_pos_tuple[2]}
 
         event = self.controller.step(action='Teleport', position=chosen_pos)
+        self.increment_actions(event)
         if event.metadata['lastActionSuccess']:
             self.agent_position = event.metadata['agent']['position']
             self.room_data['current_room'] = prev_room_key
-            print(f"Returned to previous room: {prev_room_key} at {chosen_pos}")
+            self._answers.append(f"Returned to previous room: {prev_room_key} at {chosen_pos}")
             return True
         else:
-            print(f"Failed to teleport to position {chosen_pos} in previous room {prev_room_key}.")
+            self._answers.append(f"Failed to teleport to position {chosen_pos} in previous room {prev_room_key}.")
             return False
 
-    # Methods from Ai2ThorClient (adjusted to use self.controller):
-    def initialize_human_description(self):
-        print("Robot> Please describe in one sentence what you see in the image shown.")
-        human_input = input("Evaluator> ")
-        self._human_description = human_input.strip()
-        print(f"Robot> Thank you! I have stored your description: \"{self._human_description}\"")
+    # # Methods from Ai2ThorClient (adjusted to use self.controller):
+    # def initialize_human_description(self):
+    #     print("Robot> Please describe in one sentence what you see in the image shown.")
+    #     human_input = input("Evaluator> ")
+    #     self._human_description = human_input.strip()
+    #     print(f"Robot> Thank you! I have stored your description: \"{self._human_description}\"")
 
     def search_for_object_in_view(self, objectType):
         event = self.controller.last_event
@@ -282,7 +296,8 @@ class Agent:
         found = self.search_for_object_in_view(objectType)
         rotate = 0
         while not found and rotate < 4:
-            self.controller.step(action="RotateRight", degrees=90)
+            rotate_event = self.controller.step(action="RotateRight", degrees=90)
+            self.increment_actions(rotate_event)
             found = self.search_for_object_in_view(objectType)
             rotate += 1
         if not found:
@@ -309,19 +324,38 @@ class Agent:
             answer, found_objects = self.search_for_object(target)
         elif action == "head":
             if target == "up":
-                self.controller.step(action="LookUp")
+                event = self.controller.step(action="LookUp")
+                self.increment_actions(event)
             elif target == "down":
-                self.controller.step(action="LookDown")
+                event = self.controller.step(action="LookDown")
+                self.increment_actions(event)
         elif action in ["move", "turn"]:
             if target == "forward":
-                self.controller.step(action="MoveAhead")
+                event = self.controller.step(action="MoveAhead")
+                self.increment_actions(event)
             elif target == "back":
-                self.controller.step(action="MoveBack")
+                event = self.controller.step(action="MoveBack")
+                self.increment_actions(event)
             elif target == "left":
-                self.controller.step(action="RotateLeft", degrees=90)
+                event = self.controller.step(action="RotateLeft", degrees=90)
+                self.increment_actions(event)
             elif target == "right":
-                self.controller.step(action="RotateRight", degrees=90)
-        return answer, found_objects
+                event = self.controller.step(action="RotateRight", degrees=90)
+                self.increment_actions(event)
+            elif action == "explore_room":
+                self.explore_room()
+            elif action == "switch_room":
+                self.switch_new_room()
+            elif action == "return_to_previous_room":
+                self.return_previous_room()
+            elif action == "perform_360_view":
+                panorama_path = self.perform_360_view()
+                # Describe the scene after the 360 view
+                description = self.describe_image_with_gpt(panorama_path)
+                confidence_level = self.compare_descriptions(description, self._human_description)
+                answer = f"This is what I see: {description}. My similarity confidence with your description is {confidence_level}%. What would you like to do next?"
+
+            return answer, found_objects
 
     def capture_scene_frame(self):
         image = Image.fromarray(self.controller.last_event.frame)
@@ -418,7 +452,7 @@ class Agent:
             response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": """You are a virtual assistant for controlling a robot. Convert the user's natural language instructions into a JSON object with the format: {"action": "<action>", "target": "<target>"}. If the user asks a general question or does not provide a target, return {"action": "<action>", "target": ""}."The robot can perform actions in {ACTIONS} like "find", "describe", "move", "turn", "head", "explore_room", "switch_room", "return_to_previous_room". Action "move" and "turn" should be linked with target "forward", "back", "left" or "right". Action 'head' should be connected with target 'up' or 'down'."""},
+                    {"role": "system", "content": """You are a virtual assistant for controlling a robot. Convert the user's natural language instructions into a JSON object with the format: {"action": "<action>", "target": "<target>"}. If the user asks a general question or does not provide a target, return {"action": "<action>", "target": ""}."The robot can perform actions in {ACTIONS} like "find", "describe", "move", "turn", "head", "explore_room", "switch_room", "return_to_previous_room", "perform_360_view". Action "move" and "turn" should be linked with target "forward", "back", "left" or "right". Action 'head' should be connected with target 'up' or 'down'."""},
                     {"role": "user", "content": prompt}
                 ]
             )
