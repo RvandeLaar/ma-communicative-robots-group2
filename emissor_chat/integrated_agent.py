@@ -5,25 +5,17 @@ import json
 import base64
 import requests
 import openai
-import pprint as pp
-import prior
-import matplotlib.pyplot as plt
-import math
 
 from PIL import Image
-from ai2thor.controller import Controller
 from sentence_transformers import SentenceTransformer, util
 from typing import List, Tuple, Dict, Any
 
 ACTIONS = ["find", "describe", "move", "turn", "head", "explore_room", "switch_room", "return_to_previous_room"]
 
 class Agent:
-    def __init__(self):
-        # Initialize AI2-THOR controller
-        self.controller = Controller()
-        self.controller.step(action="Initialize")
-        
+    def __init__(self, controller: object):
         # Set initial agent position
+        self.controller = controller
         self.agent_position = self.controller.last_event.metadata["agent"]["position"]
         
         # Initialize room data (from AgentNavigator)
@@ -34,9 +26,6 @@ class Agent:
         self._actions = []
         self._perceptions = []
         self._human_description = ""
-
-        # Initialize description to start the search
-        self.initialize_human_description()
 
     def initialize_room_data(self) -> dict:
         return {
