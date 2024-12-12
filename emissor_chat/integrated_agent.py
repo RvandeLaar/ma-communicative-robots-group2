@@ -107,15 +107,28 @@ class Agent:
         panorama_path = "room_panorama.jpg"
         cv2.imwrite(panorama_path, panorama)
         return panorama_path
-
+    
     def stitch_images(self, images):
+        # If less than 2 images, there's nothing to stitch
+        if len(images) < 2:
+            # Just return the first image as is
+            return cv2.cvtColor(np.array(Image.fromarray(images[0])), cv2.COLOR_RGB2BGR)
+        
         cv_images = [cv2.cvtColor(np.array(Image.fromarray(img)), cv2.COLOR_RGB2BGR) for img in images]
+        
+        # Check if all images are the same size and type
+        shapes = [img.shape for img in cv_images]
+        if len(set(shapes)) > 1:
+            print("Images have different shapes, cannot stitch. Returning first image only.")
+            return cv_images[0]
+
         stitcher = cv2.Stitcher_create()
         status, stitched_image = stitcher.stitch(cv_images)
         if status == cv2.Stitcher_OK:
             return stitched_image
         else:
-            raise Exception(f"Image stitching failed with status code {status}")
+            print(f"Image stitching failed with status code {status}. Returning first image only.")
+            return cv_images[0]  # fallback to just using the first image
 
     def explore_room(self):
         current_room_key = self.room_data['current_room']
@@ -154,7 +167,7 @@ class Agent:
                 return
             current_room['visited_positions'].add((target_position['x'], target_position['y'], target_position['z']))
             self.agent_position = event.metadata['agent']['position']
-            self._answers.append(f"Agent moved to new position: {target_position}")
+            self._answers.append(f"I moved to a new position in the room. If you would like to perform another 360-view here, please let me know.")
         except Exception as e:
             print(f"Error while moving to new position: {e}")
 
@@ -209,7 +222,7 @@ class Agent:
 
         open_doors = [
             obj for obj in objects
-            if obj['objectType'] == 'Doorway' and obj.get('openable', False) and obj.get('isOpen', False)
+            if obj['objectType'] == 'Doorway' or obj['objectType'] == 'Door' and obj.get('openable', False) and obj.get('isOpen', False)
         ]
 
         if not open_doors:
@@ -467,7 +480,6 @@ class Agent:
             raise ValueError(f"Unexpected error while parsing instruction: {e}")
 
     def compare_descriptions(self, ai_description, human_description):
-        # Using GPT to compare (as in original Ai2ThorClient)
         try:
             response = openai.ChatCompletion.create(
                 model="gpt-4",
@@ -475,18 +487,25 @@ class Agent:
                     {
                         "role": "system",
                         "content": (
-                            "An agent and a human will separately give you a description of what they see. Provide a confidence level (0-100%) that the two scenes overlap."
+                            "You are a strict parser. Given a human description and a robot description, output a single integer (0 to 100) representing the confidence that these scenes overlap. "
+                            "Do not include any additional words, explanations, or symbols. Only output the integer."
                         ),
                     },
-                    {"role": "user", "content": f"Human description: {human_description}\nRobot description: {ai_description}"},
+                    {
+                        "role": "user",
+                        "content": f"Human description: {human_description}\nRobot description: {ai_description}"
+                    },
                 ],
                 max_tokens=10,
                 temperature=0,
             )
-            confidence = response['choices'][0]['message']['content'].strip()
-            return int(confidence)
+            confidence_str = response['choices'][0]['message']['content'].strip()
+            # Try converting directly to int
+            confidence = int(confidence_str)
+            return confidence
         except Exception as e:
             print(f"Error during confidence assessment: {e}")
+            # If something goes wrong, just return 0 as fallback
             return 0
 
     def process_instruction(self, prompt):
