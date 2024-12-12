@@ -275,13 +275,6 @@ class Agent:
             self._answers.append(f"Failed to teleport to position {chosen_pos} in previous room {prev_room_key}.")
             return False
 
-    # # Methods from Ai2ThorClient (adjusted to use self.controller):
-    # def initialize_human_description(self):
-    #     print("Robot> Please describe in one sentence what you see in the image shown.")
-    #     human_input = input("Evaluator> ")
-    #     self._human_description = human_input.strip()
-    #     print(f"Robot> Thank you! I have stored your description: \"{self._human_description}\"")
-
     def search_for_object_in_view(self, objectType):
         event = self.controller.last_event
         found = []
@@ -316,12 +309,12 @@ class Agent:
         return answer
 
     def do_action(self, action, target):
-        # This will depend on whether you have Action enums or not.
-        # For simplicity, let's handle moves as strings:
         answer = ""
         found_objects = []
+
         if action == "find":
             answer, found_objects = self.search_for_object(target)
+
         elif action == "head":
             if target == "up":
                 event = self.controller.step(action="LookUp")
@@ -329,33 +322,43 @@ class Agent:
             elif target == "down":
                 event = self.controller.step(action="LookDown")
                 self.increment_actions(event)
-        elif action in ["move", "turn"]:
+
+        elif action == "move":
             if target == "forward":
                 event = self.controller.step(action="MoveAhead")
                 self.increment_actions(event)
             elif target == "back":
                 event = self.controller.step(action="MoveBack")
                 self.increment_actions(event)
-            elif target == "left":
+
+        elif action == "turn":
+            if target == "left":
                 event = self.controller.step(action="RotateLeft", degrees=90)
                 self.increment_actions(event)
             elif target == "right":
                 event = self.controller.step(action="RotateRight", degrees=90)
                 self.increment_actions(event)
-            elif action == "explore_room":
-                self.explore_room()
-            elif action == "switch_room":
-                self.switch_new_room()
-            elif action == "return_to_previous_room":
-                self.return_previous_room()
-            elif action == "perform_360_view":
-                panorama_path = self.perform_360_view()
-                # Describe the scene after the 360 view
-                description = self.describe_image_with_gpt(panorama_path)
-                confidence_level = self.compare_descriptions(description, self._human_description)
-                answer = f"This is what I see: {description}. My similarity confidence with your description is {confidence_level}%. What would you like to do next?"
 
-            return answer, found_objects
+        elif action == "explore_room":
+            # Perform the exploration and any relevant messages are stored in self._answers
+            self.explore_room()
+
+        elif action == "switch_room":
+            # Attempt to switch room
+            self.switch_new_room()
+
+        elif action == "return_to_previous_room":
+            self.return_previous_room()
+
+        elif action == "perform_360_view":
+            panorama_path = self.perform_360_view()
+            description = self.describe_image_with_gpt(panorama_path)
+            confidence_level = self.compare_descriptions(description, self._human_description)
+            answer = f"This is what I see: {description}. My similarity confidence with your description is {confidence_level}%. What would you like to do next?"
+
+        # Always return a tuple, even if empty
+        return answer, found_objects
+
 
     def capture_scene_frame(self):
         image = Image.fromarray(self.controller.last_event.frame)
