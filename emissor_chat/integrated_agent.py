@@ -15,7 +15,7 @@ from ai2thor.controller import Controller
 from sentence_transformers import SentenceTransformer, util
 from typing import List, Tuple, Dict, Any
 
-ACTIONS = ["find", "describe", "move", "turn", "head"]
+ACTIONS = ["find", "describe", "move", "turn", "head", "explore_room", "switch_room", "return_to_previous_room"]
 
 class Agent:
     def __init__(self):
@@ -35,6 +35,9 @@ class Agent:
         self._perceptions = []
         self._human_description = ""
 
+        # Initialize description to start the search
+        self.initialize_human_description()
+
     def initialize_room_data(self) -> dict:
         return {
             'rooms': {
@@ -49,12 +52,6 @@ class Agent:
             },
             'current_room': 'room_1'
         }
-
-    def turn_right(self):
-        self.controller.step(action='RotateRight', degrees=90)
-
-    def turn_left(self):
-        self.controller.step(action='RotateLeft', degrees=90)
 
     def get_reachable_positions(self):
         event = self.controller.step(action='GetReachablePositions')
@@ -432,7 +429,7 @@ class Agent:
             response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": """You are a virtual assistant for controlling a robot. Convert the user's natural language instructions into a JSON object with the format: {"action": "<action>", "target": "<target>"}. If the user asks a general question or does not provide a target, return {"action": "<action>", "target": ""}."The robot can perform actions in {ACTIONS} like "find", "describe", "move", "turn", "head". Action "move" and "turn" should be linked with target "forward", "back", "left" or "right". Action 'head' should be connected with target 'up' or 'down'."""},
+                    {"role": "system", "content": """You are a virtual assistant for controlling a robot. Convert the user's natural language instructions into a JSON object with the format: {"action": "<action>", "target": "<target>"}. If the user asks a general question or does not provide a target, return {"action": "<action>", "target": ""}."The robot can perform actions in {ACTIONS} like "find", "describe", "move", "turn", "head", "explore_room", "switch_room", "return_to_previous_room". Action "move" and "turn" should be linked with target "forward", "back", "left" or "right". Action 'head' should be connected with target 'up' or 'down'."""},
                     {"role": "user", "content": prompt}
                 ]
             )
