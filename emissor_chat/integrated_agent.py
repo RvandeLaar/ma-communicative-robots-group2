@@ -69,7 +69,6 @@ class Agent:
     def perform_360_view(self):
         """
         Perform a 360° view from the current position and update room data.
-        Keeping your version of the method, including commented out code.
         """
         current_room_key = self.room_data['current_room']
         current_room = self.room_data['rooms'][current_room_key]
