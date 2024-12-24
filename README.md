@@ -14,6 +14,9 @@ The following files contain the most recent implementation of our agent and are 
 - **`integrated_agent.py`**: Defines the integrated agent class, including functionality for dialogue and navigation.
 - **`test_agent.ipynb`**: Jupyter Notebook to initialize the AI2Thor environment and run the agent-human interaction loop.
 
+## API Key Setup
+To use OpenAI's API, ensure you have an `openaikey.txt` file in the project directory. This file should contain only your OpenAI API key as a single line of text.
+
 ## Acknowledgments
 
 This project builds on the original Communicative Robots codebase, developed by:
