@@ -7,7 +7,6 @@ import requests
 import openai
 
 from PIL import Image
-from sentence_transformers import SentenceTransformer, util
 from typing import List, Tuple, Dict, Any
 
 ACTIONS = ["find", "describe", "move", "turn", "head", "explore_room", "switch_room", "return_to_previous_room", "perform_360_view"]
@@ -639,10 +638,10 @@ class Agent:
 
     def compare_descriptions(self, human_description: str, image_path: str) -> int:
         """
-        Compare a human textual description of an object with the current image using a GPT model,
+        Compare a human textual description of a scene with the current image using a GPT model,
         and output a confidence level (0 to 100).
 
-        :param human_description: The human-provided textual description of the object.
+        :param human_description: The human-provided textual description of the scene.
         :type human_description: str
         :param image_path: The path to the image against which the description is compared.
         :type image_path: str
