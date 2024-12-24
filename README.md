@@ -8,7 +8,7 @@ The goal of this project is to develop an agent capable of collaborating with a 
 
 ## Key Files
 
-The following files contain the most recent implementation of our agent and are essential for evaluation:
+All key files are present in the emissor_chat directory. The following files contain the most recent implementation of our agent and are essential for evaluation:
 
 - **`requirements.txt`**: Lists all necessary dependencies to set up and run the project.
 - **`integrated_agent.py`**: Defines the integrated agent class, including functionality for dialogue and navigation.
