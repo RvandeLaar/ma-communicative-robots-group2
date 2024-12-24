@@ -5,3 +5,11 @@ ollama
 torch
 transformers
 ai2thor
+numpy
+opencv-python
+openai==0.28.0
+Pillow
+requests
+ipywidgets
+ipython
+leolani-client
